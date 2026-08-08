@@ -1,10 +1,17 @@
 """Synthetic commercial overlay: occupancy + revenue per train run.
 
 The DB open API exposes operational data (times, delays, cancellations) but
-no commercial data. This module generates a clearly-labelled synthetic
-commercial layer at the train-run grain so occupancy/revenue KPIs can be
-modelled and dashboarded honestly (the README and every doc state which
-figures are synthetic).
+no commercial data (bookings/revenue). This module generates a clearly
+labelled synthetic commercial layer at the train-run grain so occupancy and
+revenue KPIs can be modelled and dashboarded honestly (the README and every
+doc state which figures are synthetic).
+
+Routes are NOT invented, though: origin, destination, and distance_km below
+are loaded from reference/flixtrain_routes.json, which was extracted from
+FlixTrain's real, official GTFS feed (see pipeline/ingest/gtfs_routes.py for
+the extraction method and full provenance notes). Only seats_sold,
+avg_ticket_price_eur, and revenue_eur are generated -- the demand model
+below -- since GTFS carries no ridership or pricing data.
 
 Deterministic: same seed -> same output, so tests and demos are reproducible.
 Patterns modelled: weekday vs weekend demand, peak-hour uplift, route
@@ -13,6 +20,7 @@ popularity, dynamic-pricing-style yield spread.
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import random
 from datetime import date, timedelta
@@ -28,19 +36,21 @@ CSV_COLUMNS = [
     "revenue_eur", "distance_km", "is_synthetic",
 ]
 
-# route_id, origin, destination, km, popularity weight
-ROUTES = [
-    ("BER-HAM", "Berlin Hbf", "Hamburg Hbf", 286, 1.00),
-    ("BER-CGN", "Berlin Hbf", "Köln Hbf", 578, 0.85),
-    ("BER-MUC", "Berlin Hbf", "München Hbf", 623, 0.90),
-    ("HAM-FRA", "Hamburg Hbf", "Frankfurt (Main) Hbf", 493, 0.75),
-    ("CGN-MUC", "Köln Hbf", "München Hbf", 573, 0.70),
-    ("FRA-MUC", "Frankfurt (Main) Hbf", "München Hbf", 393, 0.80),
-    ("BER-STU", "Berlin Hbf", "Stuttgart Hbf", 630, 0.60),
-    ("LEJ-FRA", "Leipzig Hbf", "Frankfurt (Main) Hbf", 386, 0.55),
-    ("HAM-CGN", "Hamburg Hbf", "Köln Hbf", 426, 0.65),
-    ("DUS-MUC", "Düsseldorf Hbf", "München Hbf", 611, 0.60),
-]
+REFERENCE_PATH = Path(__file__).parent / "reference" / "flixtrain_routes.json"
+
+
+def _load_routes() -> list[tuple[str, str, str, int, float]]:
+    """Load real FlixTrain route/distance data (see module docstring)."""
+    data = json.loads(REFERENCE_PATH.read_text(encoding="utf-8"))
+    return [
+        (r["route_id"], r["origin"], r["destination"], r["distance_km"], r["popularity_weight"])
+        for r in data["routes"]
+    ]
+
+
+# route_id, origin, destination, km, popularity weight -- real routes/distances,
+# modelled popularity (see _load_routes docstring and reference JSON _note field)
+ROUTES = _load_routes()
 
 SEATS_PER_TRAIN = 480          # single-deck long-distance consist
 DEPARTURES_PER_ROUTE_DAY = 4   # each direction collapsed to route level

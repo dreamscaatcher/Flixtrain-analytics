@@ -19,7 +19,9 @@ Share of all stop events flagged cancelled (`cs="c"` in the source API).
 **Platform-change rate** — `platform_change_rate`
 Share of events where the changed platform differs from planned. Operational-friction proxy: platform changes drive missed connections and crowding.
 
-## Commercial (synthetic overlay — labelled)
+## Commercial (real routes, synthetic demand overlay — labelled)
+
+Routes/distances are real (FlixTrain's official GTFS feed); seats sold, pricing, and revenue are a documented synthetic demand model. See `docs/data_dictionary.md` for full provenance.
 
 **Load factor** — `rail_ops_staging.stg_train_runs.load_factor`
 `seats_sold / seats_total` per run; averaged in `v_kpi_route_daily`.

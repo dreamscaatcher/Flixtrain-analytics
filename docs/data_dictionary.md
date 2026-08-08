@@ -16,25 +16,25 @@
 | platform_changed | BOOL | changed platform ≠ planned |
 | planned_hour | INT64 | 0–23, for peak-hour analysis |
 
-## rail_ops_marts.fact_train_runs — grain: train × route × service date · **SYNTHETIC commercial layer**
+## rail_ops_marts.fact_train_runs — grain: train × route × service date · **route is real, occupancy/revenue is SYNTHETIC**
 
 | Column | Type | Description |
 |---|---|---|
 | train_run_key | STRING | `date + train + route`, unique |
 | date_key / route_key | DATE / STRING | FKs → dim_date, dim_route |
-| seats_total / seats_sold | INT64 | capacity 480; sold from seeded demand model |
+| seats_total / seats_sold | INT64 | capacity 480 (modelled); sold from seeded demand model |
 | load_factor | FLOAT64 | sold / total |
 | avg_ticket_price_eur / revenue_eur | NUMERIC | yield rises with load (dynamic-pricing proxy) |
 | seat_km / revenue_per_seat_km | INT64 / FLOAT64 | unit economics |
 | max_arrival_delay | INT64 | enrichment from real stop events, NULL if no match |
-| is_synthetic | BOOL | always TRUE — honesty flag |
+| is_synthetic | BOOL | always TRUE — flags the commercial fields only; route/distance are real (see dim_route) |
 
 ## Dimensions
 
 **dim_date** — calendar 2026–2027, generated in-warehouse; ISO weeks, weekend flag.
-**dim_station** — EVA number + name, from observed stop events.
-**dim_route** — origin/destination/distance for the 10 modelled corridors.
-**dim_train** — category (FLX/ICE/IC) + number; `is_flix_train` flag.
+**dim_station** — EVA number + name, from observed stop events (real, DB Timetables API).
+**dim_route** — 10 real city-pair segments of FlixTrain's actual single operating corridor (Hamburg–Berlin–Erfurt–Frankfurt–Karlsruhe–Freiburg–Basel), with real distances computed from FlixTrain's official GTFS feed. Only `popularity_weight` (used to shape the synthetic demand model) is an estimate — GTFS carries no ridership data. Full provenance: `pipeline/ingest/reference/flixtrain_routes.json`, extraction method in `pipeline/ingest/gtfs_routes.py`. Note: FlixTrain's GTFS also defines two more lines (Hamburg–Köln, Dresden–Berlin–Köln–Aachen) with zero active trips in the current feed — i.e. not currently operated, which is itself a real finding about FlixTrain's present network size, not a data gap.
+**dim_train** — category (FLX/ICE/IC) + number; `is_flix_train` flag (from real DB Timetables data — FLX trains are relatively rare in this sample since the tracked stations are DB long-distance hubs, not FlixTrain-specific stops).
 
 ## RAW layer
 

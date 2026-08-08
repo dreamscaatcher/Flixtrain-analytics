@@ -40,7 +40,12 @@ def test_platform_change_captured():
     assert flx["changed_platform"] == "14"
 
 
-def test_offline_ingest_writes_csv(tmp_path):
+def test_offline_ingest_writes_csv(tmp_path, monkeypatch):
+    # Force fixture mode regardless of ambient .env credentials -- this is a
+    # unit test against bundled fixtures, not an integration test against the
+    # live API (which would be slow, network-dependent, and non-deterministic).
+    monkeypatch.setattr(config, "DB_CLIENT_ID", "")
+    monkeypatch.setattr(config, "DB_API_KEY", "")
     out = db_timetables.ingest(out_path=tmp_path / "stop_events.csv")
     with out.open(encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))

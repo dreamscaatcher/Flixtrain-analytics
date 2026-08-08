@@ -25,7 +25,7 @@ Mark `dim_date` as the date table. Paste measures from `measures.dax` into a ded
 - 4 KPI cards: `Punctuality % (6 min)`, `Avg Arrival Delay (min)`, `Avg Load Factor`, `Total Revenue EUR`
 - Line chart: Punctuality % (6 min) by `dim_date[date_key]`, with 90% target constant line
 - Combo chart: Revenue (columns) + Load Factor (line) by date
-- Slicer: date range. Footer text box: *"Commercial figures are synthetic (see repo docs); operational figures are real DB open data."*
+- Slicer: date range. Footer text box: *"Occupancy/revenue are a synthetic demand model (see repo docs); routes, delays, and cancellations are real."*
 
 ### Page 2 — Operations Deep-Dive
 - Matrix: `dim_station[station_name]` rows × Punctuality % / Avg Delay / Cancellation Rate, conditional formatting (red > 10 min)
@@ -33,8 +33,8 @@ Mark `dim_date` as the date table. Paste measures from `measures.dax` into a ded
 - Column chart: delay by `fact_stop_events[planned_hour]` (peak-hour pattern)
 - Decomposition tree: Avg Arrival Delay by station → hour → train category
 
-### Page 3 — Commercial (Synthetic)
-- Header banner: **"SYNTHETIC DATA — demand model, not real bookings"**
+### Page 3 — Commercial (real routes, synthetic bookings)
+- Header banner: **"Routes are FlixTrain's real network (GTFS) — occupancy and revenue are a synthetic demand model, not real bookings"**
 - Table: routes × passengers, load factor, revenue, revenue/seat-km
 - Line: `Load Factor 7d Avg` by date, split by route
 - Scatter: Load Factor vs Avg Max Arrival Delay by route (does unreliability depress demand?)
