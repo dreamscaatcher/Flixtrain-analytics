@@ -1,0 +1,31 @@
+-- RAW layer: schema mirrors the pipeline CSVs exactly. No transformation here.
+CREATE TABLE IF NOT EXISTS RAW.STOP_EVENTS (
+  STOP_ID            VARCHAR,
+  STATION_EVA        NUMBER,
+  STATION_NAME       VARCHAR,
+  TRAIN_CATEGORY     VARCHAR,
+  TRAIN_NUMBER       VARCHAR,
+  LINE               VARCHAR,
+  EVENT_TYPE         VARCHAR,      -- ARRIVAL | DEPARTURE
+  PLANNED_TIME       TIMESTAMP_NTZ,
+  CHANGED_TIME       TIMESTAMP_NTZ,
+  PLANNED_PLATFORM   VARCHAR,
+  CHANGED_PLATFORM   VARCHAR,
+  CANCELLED          BOOLEAN,
+  LOADED_AT          TIMESTAMP_NTZ
+);
+
+CREATE TABLE IF NOT EXISTS RAW.TRAIN_RUNS (
+  SERVICE_DATE          DATE,
+  TRAIN_NUMBER          VARCHAR,
+  ROUTE_ID              VARCHAR,
+  ORIGIN                VARCHAR,
+  DESTINATION           VARCHAR,
+  DEPARTURE_HOUR        NUMBER,
+  SEATS_TOTAL           NUMBER,
+  SEATS_SOLD            NUMBER,
+  AVG_TICKET_PRICE_EUR  NUMBER(10,2),
+  REVENUE_EUR           NUMBER(12,2),
+  DISTANCE_KM           NUMBER,
+  IS_SYNTHETIC          BOOLEAN       -- always TRUE: commercial layer is generated
+);

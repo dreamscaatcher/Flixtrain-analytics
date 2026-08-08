@@ -1,0 +1,54 @@
+// DAX measures for the Rail Ops dashboard.
+// NOTE: business logic (delay thresholds, load factor, revenue/seat-km) is
+// computed in Snowflake MARTS views -- these measures only aggregate and
+// format. Never re-derive KPI logic in DAX: the warehouse is the single
+// source of truth.
+
+// ---------- Operations (V_KPI_OPS_DAILY / FACT_STOP_EVENTS) ----------
+
+Punctuality % (6 min) =
+AVERAGE ( V_KPI_OPS_DAILY[PUNCTUALITY_6MIN] )
+
+Punctuality % (15 min) =
+AVERAGE ( V_KPI_OPS_DAILY[PUNCTUALITY_15MIN] )
+
+Avg Arrival Delay (min) =
+AVERAGE ( V_KPI_OPS_DAILY[AVG_ARRIVAL_DELAY_MIN] )
+
+Cancellation Rate =
+AVERAGE ( V_KPI_OPS_DAILY[CANCELLATION_RATE] )
+
+Punctuality vs Prev Period =
+VAR Current = [Punctuality % (6 min)]
+VAR Previous =
+    CALCULATE ( [Punctuality % (6 min)], DATEADD ( DIM_DATE[DATE_KEY], -7, DAY ) )
+RETURN Current - Previous
+
+// ---------- Commercial (V_KPI_ROUTE_DAILY; synthetic overlay) ----------
+
+Total Revenue EUR =
+SUM ( V_KPI_ROUTE_DAILY[REVENUE_EUR] )
+
+Total Passengers =
+SUM ( V_KPI_ROUTE_DAILY[PASSENGERS] )
+
+Avg Load Factor =
+AVERAGE ( V_KPI_ROUTE_DAILY[AVG_LOAD_FACTOR] )
+
+Revenue per Seat-km =
+DIVIDE (
+    SUM ( V_KPI_ROUTE_DAILY[REVENUE_EUR] ),
+    SUMX (
+        V_KPI_ROUTE_DAILY,
+        V_KPI_ROUTE_DAILY[REVENUE_EUR] / V_KPI_ROUTE_DAILY[REVENUE_PER_SEAT_KM]
+    )
+)
+
+Revenue MTD =
+TOTALMTD ( [Total Revenue EUR], DIM_DATE[DATE_KEY] )
+
+Load Factor 7d Avg =
+AVERAGEX (
+    DATESINPERIOD ( DIM_DATE[DATE_KEY], MAX ( DIM_DATE[DATE_KEY] ), -7, DAY ),
+    [Avg Load Factor]
+)
