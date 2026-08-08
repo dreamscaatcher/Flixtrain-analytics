@@ -3,60 +3,61 @@
 
 -- Stop events: dedupe on (stop_id, event_type) keeping the latest load,
 -- compute delay minutes from planned vs changed time.
-CREATE OR REPLACE VIEW STAGING.STG_STOP_EVENTS AS
+CREATE OR REPLACE VIEW rail_ops_staging.stg_stop_events AS
 WITH deduped AS (
   SELECT *,
          ROW_NUMBER() OVER (
-           PARTITION BY STOP_ID, EVENT_TYPE
-           ORDER BY LOADED_AT DESC, CHANGED_TIME DESC NULLS LAST
-         ) AS RN
-  FROM RAW.STOP_EVENTS
+           PARTITION BY stop_id, event_type
+           ORDER BY loaded_at DESC, changed_time DESC
+         ) AS rn
+  FROM rail_ops_raw.stop_events
 )
 SELECT
-  STOP_ID,
-  STATION_EVA,
-  STATION_NAME,
-  TRAIN_CATEGORY,
-  TRAIN_NUMBER,
-  TRAIN_CATEGORY || ' ' || TRAIN_NUMBER                       AS TRAIN_ID,
-  LINE,
-  EVENT_TYPE,
-  PLANNED_TIME,
-  CHANGED_TIME,
-  COALESCE(CHANGED_TIME, PLANNED_TIME)                        AS ACTUAL_TIME,
-  DATEDIFF('minute', PLANNED_TIME,
-           COALESCE(CHANGED_TIME, PLANNED_TIME))              AS DELAY_MINUTES,
-  CANCELLED,
-  PLANNED_PLATFORM,
-  CHANGED_PLATFORM,
-  (CHANGED_PLATFORM IS NOT NULL
-   AND CHANGED_PLATFORM <> ''
-   AND CHANGED_PLATFORM <> PLANNED_PLATFORM)                  AS PLATFORM_CHANGED,
-  PLANNED_TIME::DATE                                          AS SERVICE_DATE,
-  HOUR(PLANNED_TIME)                                          AS PLANNED_HOUR,
-  LOADED_AT
+  stop_id,
+  station_eva,
+  station_name,
+  train_category,
+  train_number,
+  CONCAT(train_category, ' ', train_number)                   AS train_id,
+  line,
+  event_type,
+  planned_time,
+  changed_time,
+  COALESCE(changed_time, planned_time)                        AS actual_time,
+  DATETIME_DIFF(COALESCE(changed_time, planned_time),
+                planned_time, MINUTE)                         AS delay_minutes,
+  LOWER(cancelled) = 'true'                                   AS cancelled,
+  planned_platform,
+  changed_platform,
+  (changed_platform IS NOT NULL
+   AND changed_platform != ''
+   AND changed_platform != planned_platform)                  AS platform_changed,
+  DATE(planned_time)                                          AS service_date,
+  EXTRACT(HOUR FROM planned_time)                             AS planned_hour,
+  loaded_at
 FROM deduped
-WHERE RN = 1
-  AND PLANNED_TIME IS NOT NULL;
+WHERE rn = 1
+  AND planned_time IS NOT NULL;
 
--- Train runs: basic sanity filters; derived per-run economics.
-CREATE OR REPLACE VIEW STAGING.STG_TRAIN_RUNS AS
+-- Train runs: basic sanity filters and derived per-run economics.
+-- (Never put a semicolon inside a comment -- the loader splits files on it.)
+CREATE OR REPLACE VIEW rail_ops_staging.stg_train_runs AS
 SELECT
-  SERVICE_DATE,
-  TRAIN_NUMBER,
-  ROUTE_ID,
-  ORIGIN,
-  DESTINATION,
-  DEPARTURE_HOUR,
-  SEATS_TOTAL,
-  SEATS_SOLD,
-  AVG_TICKET_PRICE_EUR,
-  REVENUE_EUR,
-  DISTANCE_KM,
-  SEATS_SOLD / NULLIF(SEATS_TOTAL, 0)                         AS LOAD_FACTOR,
-  SEATS_TOTAL * DISTANCE_KM                                   AS SEAT_KM,
-  REVENUE_EUR / NULLIF(SEATS_TOTAL * DISTANCE_KM, 0)          AS REVENUE_PER_SEAT_KM,
-  IS_SYNTHETIC
-FROM RAW.TRAIN_RUNS
-WHERE SEATS_SOLD BETWEEN 0 AND SEATS_TOTAL   -- data quality gate
-  AND REVENUE_EUR >= 0;
+  service_date,
+  train_number,
+  route_id,
+  origin,
+  destination,
+  departure_hour,
+  seats_total,
+  seats_sold,
+  avg_ticket_price_eur,
+  revenue_eur,
+  distance_km,
+  SAFE_DIVIDE(seats_sold, seats_total)                        AS load_factor,
+  seats_total * distance_km                                   AS seat_km,
+  SAFE_DIVIDE(revenue_eur, seats_total * distance_km)         AS revenue_per_seat_km,
+  LOWER(is_synthetic) = 'true'                                AS is_synthetic
+FROM rail_ops_raw.train_runs
+WHERE seats_sold BETWEEN 0 AND seats_total   -- data quality gate
+  AND revenue_eur >= 0;

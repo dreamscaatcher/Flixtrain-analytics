@@ -29,12 +29,15 @@ STATIONS = {
     8000085: "Düsseldorf Hbf",
 }
 
-# Snowflake
-SNOWFLAKE = {
-    "account": os.getenv("SNOWFLAKE_ACCOUNT", ""),
-    "user": os.getenv("SNOWFLAKE_USER", ""),
-    "password": os.getenv("SNOWFLAKE_PASSWORD", ""),
-    "role": os.getenv("SNOWFLAKE_ROLE", "SYSADMIN"),
-    "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE", "RAIL_OPS_WH"),
-    "database": os.getenv("SNOWFLAKE_DATABASE", "RAIL_OPS"),
+# Google BigQuery (free sandbox tier works; auth via ADC or service-account key)
+GCP = {
+    "project": os.getenv("GCP_PROJECT_ID", ""),
+    "location": os.getenv("BQ_LOCATION", "EU"),
+}
+
+# Dataset layout (BigQuery has no schemas-inside-database; one dataset per layer)
+BQ_DATASETS = {
+    "raw": "rail_ops_raw",
+    "staging": "rail_ops_staging",
+    "marts": "rail_ops_marts",
 }

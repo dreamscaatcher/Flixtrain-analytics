@@ -1,31 +1,33 @@
 -- RAW layer: schema mirrors the pipeline CSVs exactly. No transformation here.
-CREATE TABLE IF NOT EXISTS RAW.STOP_EVENTS (
-  STOP_ID            VARCHAR,
-  STATION_EVA        NUMBER,
-  STATION_NAME       VARCHAR,
-  TRAIN_CATEGORY     VARCHAR,
-  TRAIN_NUMBER       VARCHAR,
-  LINE               VARCHAR,
-  EVENT_TYPE         VARCHAR,      -- ARRIVAL | DEPARTURE
-  PLANNED_TIME       TIMESTAMP_NTZ,
-  CHANGED_TIME       TIMESTAMP_NTZ,
-  PLANNED_PLATFORM   VARCHAR,
-  CHANGED_PLATFORM   VARCHAR,
-  CANCELLED          BOOLEAN,
-  LOADED_AT          TIMESTAMP_NTZ
+-- Booleans land as STRING and are cast in staging: raw stays a faithful copy
+-- of the source file, and a malformed value fails visibly in one place.
+CREATE TABLE IF NOT EXISTS rail_ops_raw.stop_events (
+  stop_id            STRING,
+  station_eva        INT64,
+  station_name       STRING,
+  train_category     STRING,
+  train_number       STRING,
+  line               STRING,
+  event_type         STRING,      -- ARRIVAL | DEPARTURE
+  planned_time       DATETIME,
+  changed_time       DATETIME,
+  planned_platform   STRING,
+  changed_platform   STRING,
+  cancelled          STRING,      -- 'True'/'False' from pipeline CSV
+  loaded_at          DATETIME
 );
 
-CREATE TABLE IF NOT EXISTS RAW.TRAIN_RUNS (
-  SERVICE_DATE          DATE,
-  TRAIN_NUMBER          VARCHAR,
-  ROUTE_ID              VARCHAR,
-  ORIGIN                VARCHAR,
-  DESTINATION           VARCHAR,
-  DEPARTURE_HOUR        NUMBER,
-  SEATS_TOTAL           NUMBER,
-  SEATS_SOLD            NUMBER,
-  AVG_TICKET_PRICE_EUR  NUMBER(10,2),
-  REVENUE_EUR           NUMBER(12,2),
-  DISTANCE_KM           NUMBER,
-  IS_SYNTHETIC          BOOLEAN       -- always TRUE: commercial layer is generated
+CREATE TABLE IF NOT EXISTS rail_ops_raw.train_runs (
+  service_date          DATE,
+  train_number          STRING,
+  route_id              STRING,
+  origin                STRING,
+  destination           STRING,
+  departure_hour        INT64,
+  seats_total           INT64,
+  seats_sold            INT64,
+  avg_ticket_price_eur  NUMERIC,
+  revenue_eur           NUMERIC,
+  distance_km           INT64,
+  is_synthetic          STRING       -- always 'True': commercial layer is generated
 );

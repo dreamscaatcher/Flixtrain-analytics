@@ -19,7 +19,7 @@ log = logging.getLogger("pipeline")
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rail ops analytics pipeline")
     parser.add_argument("--local-only", action="store_true",
-                        help="Skip Snowflake load (produce CSVs only)")
+                        help="Skip BigQuery load (produce CSVs only)")
     parser.add_argument("--days", type=int, default=90,
                         help="Days of synthetic commercial history to generate")
     args = parser.parse_args(argv)
@@ -31,8 +31,8 @@ def main(argv: list[str] | None = None) -> int:
         log.info("Local-only run complete (CSVs in data/).")
         return 0
 
-    from pipeline.load import snowflake_loader  # import here: optional dep at runtime
-    snowflake_loader.full_load()
+    from pipeline.load import bigquery_loader  # import here: optional dep at runtime
+    bigquery_loader.full_load()
     return 0
 
 

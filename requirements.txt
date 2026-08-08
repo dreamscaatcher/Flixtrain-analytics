@@ -1,5 +1,6 @@
 requests>=2.31
 python-dotenv>=1.0
-snowflake-connector-python>=3.7
+google-cloud-bigquery>=3.20
 pandas>=2.0
 pytest>=8.0
+sqlglot>=23.0

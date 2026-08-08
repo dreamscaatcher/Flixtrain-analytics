@@ -2,67 +2,70 @@
 -- Full business definitions: docs/kpi_definitions.md
 
 -- Daily operational KPIs (real data).
-CREATE OR REPLACE VIEW MARTS.V_KPI_OPS_DAILY AS
+CREATE OR REPLACE VIEW rail_ops_marts.v_kpi_ops_daily AS
 SELECT
-  DATE_KEY,
-  COUNT(*)                                                    AS STOP_EVENTS,
-  COUNT(DISTINCT TRAIN_KEY)                                   AS TRAINS,
-  AVG(IFF(EVENT_TYPE = 'ARRIVAL', DELAY_MINUTES, NULL))       AS AVG_ARRIVAL_DELAY_MIN,
-  AVG(IFF(EVENT_TYPE = 'ARRIVAL' AND IS_PUNCTUAL_6, 1, 0))    AS PUNCTUALITY_6MIN,
-  AVG(IFF(EVENT_TYPE = 'ARRIVAL' AND IS_PUNCTUAL_15, 1, 0))   AS PUNCTUALITY_15MIN,
-  AVG(IFF(CANCELLED, 1, 0))                                   AS CANCELLATION_RATE,
-  AVG(IFF(PLATFORM_CHANGED, 1, 0))                            AS PLATFORM_CHANGE_RATE
-FROM MARTS.FACT_STOP_EVENTS
-GROUP BY DATE_KEY;
+  date_key,
+  COUNT(*)                                                    AS stop_events,
+  COUNT(DISTINCT train_key)                                   AS trains,
+  AVG(IF(event_type = 'ARRIVAL', delay_minutes, NULL))        AS avg_arrival_delay_min,
+  AVG(IF(event_type = 'ARRIVAL',
+         IF(is_punctual_6, 1, 0), NULL))                      AS punctuality_6min,
+  AVG(IF(event_type = 'ARRIVAL',
+         IF(is_punctual_15, 1, 0), NULL))                     AS punctuality_15min,
+  AVG(IF(cancelled, 1, 0))                                    AS cancellation_rate,
+  AVG(IF(platform_changed, 1, 0))                             AS platform_change_rate
+FROM rail_ops_marts.fact_stop_events
+GROUP BY date_key;
 
 -- Station-level delay picture (real data).
-CREATE OR REPLACE VIEW MARTS.V_KPI_STATION AS
+CREATE OR REPLACE VIEW rail_ops_marts.v_kpi_station AS
 SELECT
-  f.STATION_KEY,
-  s.STATION_NAME,
-  COUNT(*)                                                    AS STOP_EVENTS,
-  AVG(IFF(f.EVENT_TYPE = 'ARRIVAL', f.DELAY_MINUTES, NULL))   AS AVG_ARRIVAL_DELAY_MIN,
-  AVG(IFF(f.EVENT_TYPE = 'ARRIVAL' AND f.IS_PUNCTUAL_6, 1, 0)) AS PUNCTUALITY_6MIN,
-  AVG(IFF(f.CANCELLED, 1, 0))                                 AS CANCELLATION_RATE
-FROM MARTS.FACT_STOP_EVENTS f
-JOIN MARTS.DIM_STATION s ON s.STATION_KEY = f.STATION_KEY
+  f.station_key,
+  s.station_name,
+  COUNT(*)                                                    AS stop_events,
+  AVG(IF(f.event_type = 'ARRIVAL', f.delay_minutes, NULL))    AS avg_arrival_delay_min,
+  AVG(IF(f.event_type = 'ARRIVAL',
+         IF(f.is_punctual_6, 1, 0), NULL))                    AS punctuality_6min,
+  AVG(IF(f.cancelled, 1, 0))                                  AS cancellation_rate
+FROM rail_ops_marts.fact_stop_events f
+JOIN rail_ops_marts.dim_station s ON s.station_key = f.station_key
 GROUP BY 1, 2;
 
 -- Route-level commercial KPIs (synthetic overlay), daily.
-CREATE OR REPLACE VIEW MARTS.V_KPI_ROUTE_DAILY AS
+CREATE OR REPLACE VIEW rail_ops_marts.v_kpi_route_daily AS
 SELECT
-  f.DATE_KEY,
-  f.ROUTE_KEY,
-  r.ORIGIN,
-  r.DESTINATION,
-  COUNT(*)                                                    AS TRAIN_RUNS,
-  SUM(f.SEATS_SOLD)                                           AS PASSENGERS,
-  AVG(f.LOAD_FACTOR)                                          AS AVG_LOAD_FACTOR,
-  SUM(f.REVENUE_EUR)                                          AS REVENUE_EUR,
-  SUM(f.REVENUE_EUR) / NULLIF(SUM(f.SEAT_KM), 0)              AS REVENUE_PER_SEAT_KM,
-  AVG(f.MAX_ARRIVAL_DELAY)                                    AS AVG_MAX_ARRIVAL_DELAY
-FROM MARTS.FACT_TRAIN_RUNS f
-JOIN MARTS.DIM_ROUTE r ON r.ROUTE_KEY = f.ROUTE_KEY
+  f.date_key,
+  f.route_key,
+  r.origin,
+  r.destination,
+  COUNT(*)                                                    AS train_runs,
+  SUM(f.seats_sold)                                           AS passengers,
+  AVG(f.load_factor)                                          AS avg_load_factor,
+  SUM(f.revenue_eur)                                          AS revenue_eur,
+  SAFE_DIVIDE(SUM(f.revenue_eur), SUM(f.seat_km))             AS revenue_per_seat_km,
+  AVG(f.max_arrival_delay)                                    AS avg_max_arrival_delay
+FROM rail_ops_marts.fact_train_runs f
+JOIN rail_ops_marts.dim_route r ON r.route_key = f.route_key
 GROUP BY 1, 2, 3, 4;
 
 -- Executive daily rollup: ops + commercial in one row per day.
-CREATE OR REPLACE VIEW MARTS.V_KPI_EXEC_DAILY AS
+CREATE OR REPLACE VIEW rail_ops_marts.v_kpi_exec_daily AS
 SELECT
-  d.DATE_KEY,
-  d.DAY_NAME,
-  d.IS_WEEKEND,
-  o.PUNCTUALITY_6MIN,
-  o.AVG_ARRIVAL_DELAY_MIN,
-  o.CANCELLATION_RATE,
-  c.PASSENGERS,
-  c.AVG_LOAD_FACTOR,
-  c.REVENUE_EUR
-FROM MARTS.DIM_DATE d
-LEFT JOIN MARTS.V_KPI_OPS_DAILY o ON o.DATE_KEY = d.DATE_KEY
+  d.date_key,
+  d.day_name,
+  d.is_weekend,
+  o.punctuality_6min,
+  o.avg_arrival_delay_min,
+  o.cancellation_rate,
+  c.passengers,
+  c.avg_load_factor,
+  c.revenue_eur
+FROM rail_ops_marts.dim_date d
+LEFT JOIN rail_ops_marts.v_kpi_ops_daily o ON o.date_key = d.date_key
 LEFT JOIN (
-  SELECT DATE_KEY, SUM(PASSENGERS) AS PASSENGERS,
-         AVG(AVG_LOAD_FACTOR) AS AVG_LOAD_FACTOR,
-         SUM(REVENUE_EUR) AS REVENUE_EUR
-  FROM MARTS.V_KPI_ROUTE_DAILY GROUP BY 1
-) c ON c.DATE_KEY = d.DATE_KEY
-WHERE o.DATE_KEY IS NOT NULL OR c.DATE_KEY IS NOT NULL;
+  SELECT date_key, SUM(passengers) AS passengers,
+         AVG(avg_load_factor) AS avg_load_factor,
+         SUM(revenue_eur) AS revenue_eur
+  FROM rail_ops_marts.v_kpi_route_daily GROUP BY 1
+) c ON c.date_key = d.date_key
+WHERE o.date_key IS NOT NULL OR c.date_key IS NOT NULL;

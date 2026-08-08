@@ -29,11 +29,13 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - name: Run pipeline into Snowflake
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Run pipeline into BigQuery
         env:
           DB_CLIENT_ID: ${{ secrets.DB_CLIENT_ID }}
           DB_API_KEY: ${{ secrets.DB_API_KEY }}
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: python -m pipeline.run_pipeline

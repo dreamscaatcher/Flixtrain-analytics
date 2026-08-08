@@ -1,19 +1,5 @@
 -- One-time environment setup. Idempotent: safe to re-run.
-CREATE DATABASE IF NOT EXISTS RAIL_OPS;
-
-CREATE WAREHOUSE IF NOT EXISTS RAIL_OPS_WH
-  WAREHOUSE_SIZE = XSMALL
-  AUTO_SUSPEND = 60            -- cost control: suspend after 60s idle
-  AUTO_RESUME = TRUE
-  INITIALLY_SUSPENDED = TRUE;
-
-CREATE SCHEMA IF NOT EXISTS RAIL_OPS.RAW;      -- landed as-is from pipeline
-CREATE SCHEMA IF NOT EXISTS RAIL_OPS.STAGING;  -- typed, cleaned, deduplicated
-CREATE SCHEMA IF NOT EXISTS RAIL_OPS.MARTS;    -- star schema + KPI views (BI reads ONLY from here)
-
-CREATE FILE FORMAT IF NOT EXISTS RAIL_OPS.RAW.CSV_FORMAT
-  TYPE = CSV
-  SKIP_HEADER = 1
-  FIELD_OPTIONALLY_ENCLOSED_BY = '"'
-  EMPTY_FIELD_AS_NULL = TRUE
-  NULL_IF = ('', 'None');
+-- BigQuery layers as datasets (BI reads ONLY from rail_ops_marts).
+CREATE SCHEMA IF NOT EXISTS rail_ops_raw     OPTIONS (location = 'EU');
+CREATE SCHEMA IF NOT EXISTS rail_ops_staging OPTIONS (location = 'EU');
+CREATE SCHEMA IF NOT EXISTS rail_ops_marts   OPTIONS (location = 'EU');

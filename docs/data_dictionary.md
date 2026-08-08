@@ -1,41 +1,41 @@
 # Data Dictionary
 
-## MARTS.FACT_STOP_EVENTS — grain: train × station × event (arrival/departure)
+## rail_ops_marts.fact_stop_events — grain: train × station × event (arrival/departure)
 
 | Column | Type | Description |
 |---|---|---|
-| STOP_EVENT_KEY | VARCHAR | `stop_id + event_type`, unique |
-| DATE_KEY | DATE | FK → DIM_DATE (planned service date) |
-| STATION_KEY | NUMBER | FK → DIM_STATION (EVA number) |
-| TRAIN_KEY | VARCHAR | FK → DIM_TRAIN (`category + number`) |
-| EVENT_TYPE | VARCHAR | ARRIVAL / DEPARTURE |
-| PLANNED_TIME / ACTUAL_TIME | TIMESTAMP_NTZ | Actual = changed time, falls back to planned |
-| DELAY_MINUTES | NUMBER | `actual − planned`, minutes; 0 if no change reported |
-| IS_PUNCTUAL_6 / IS_PUNCTUAL_15 | BOOLEAN | delay < 6 / < 16 min |
-| CANCELLED | BOOLEAN | source flag `cs="c"` |
-| PLATFORM_CHANGED | BOOLEAN | changed platform ≠ planned |
-| PLANNED_HOUR | NUMBER | 0–23, for peak-hour analysis |
+| stop_event_key | STRING | `stop_id + event_type`, unique |
+| date_key | DATE | FK → dim_date (planned service date) |
+| station_key | INT64 | FK → dim_station (EVA number) |
+| train_key | STRING | FK → dim_train (`category + number`) |
+| event_type | STRING | ARRIVAL / DEPARTURE |
+| planned_time / actual_time | DATETIME | Actual = changed time, falls back to planned |
+| delay_minutes | INT64 | `actual − planned`, minutes; 0 if no change reported |
+| is_punctual_6 / is_punctual_15 | BOOL | delay < 6 / < 16 min |
+| cancelled | BOOL | source flag `cs="c"` |
+| platform_changed | BOOL | changed platform ≠ planned |
+| planned_hour | INT64 | 0–23, for peak-hour analysis |
 
-## MARTS.FACT_TRAIN_RUNS — grain: train × route × service date · **SYNTHETIC commercial layer**
+## rail_ops_marts.fact_train_runs — grain: train × route × service date · **SYNTHETIC commercial layer**
 
 | Column | Type | Description |
 |---|---|---|
-| TRAIN_RUN_KEY | VARCHAR | `date + train + route`, unique |
-| DATE_KEY / ROUTE_KEY | DATE / VARCHAR | FKs → DIM_DATE, DIM_ROUTE |
-| SEATS_TOTAL / SEATS_SOLD | NUMBER | capacity 480; sold from seeded demand model |
-| LOAD_FACTOR | NUMBER | sold / total |
-| AVG_TICKET_PRICE_EUR / REVENUE_EUR | NUMBER | yield rises with load (dynamic-pricing proxy) |
-| SEAT_KM / REVENUE_PER_SEAT_KM | NUMBER | unit economics |
-| MAX_ARRIVAL_DELAY | NUMBER | enrichment from real stop events, NULL if no match |
-| IS_SYNTHETIC | BOOLEAN | always TRUE — honesty flag |
+| train_run_key | STRING | `date + train + route`, unique |
+| date_key / route_key | DATE / STRING | FKs → dim_date, dim_route |
+| seats_total / seats_sold | INT64 | capacity 480; sold from seeded demand model |
+| load_factor | FLOAT64 | sold / total |
+| avg_ticket_price_eur / revenue_eur | NUMERIC | yield rises with load (dynamic-pricing proxy) |
+| seat_km / revenue_per_seat_km | INT64 / FLOAT64 | unit economics |
+| max_arrival_delay | INT64 | enrichment from real stop events, NULL if no match |
+| is_synthetic | BOOL | always TRUE — honesty flag |
 
 ## Dimensions
 
-**DIM_DATE** — calendar 2026–2027, generated in-warehouse; ISO weeks, weekend flag.
-**DIM_STATION** — EVA number + name, from observed stop events.
-**DIM_ROUTE** — origin/destination/distance for the 10 modelled corridors.
-**DIM_TRAIN** — category (FLX/ICE/IC) + number; `IS_FLIX_TRAIN` flag.
+**dim_date** — calendar 2026–2027, generated in-warehouse; ISO weeks, weekend flag.
+**dim_station** — EVA number + name, from observed stop events.
+**dim_route** — origin/destination/distance for the 10 modelled corridors.
+**dim_train** — category (FLX/ICE/IC) + number; `is_flix_train` flag.
 
 ## RAW layer
 
-Mirrors pipeline CSVs 1:1 (`pipeline/ingest/db_timetables.py` → `RAW.STOP_EVENTS`, `pipeline/ingest/synthetic.py` → `RAW.TRAIN_RUNS`). No transformation before STAGING — reprocessing is always possible from landed data.
+Mirrors pipeline CSVs 1:1 (`pipeline/ingest/db_timetables.py` → `rail_ops_raw.stop_events`, `pipeline/ingest/synthetic.py` → `rail_ops_raw.train_runs`). No transformation before staging — reprocessing is always possible from landed data.
