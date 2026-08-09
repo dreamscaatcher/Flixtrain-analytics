@@ -10,6 +10,10 @@ Built to mirror the day-to-day work of an operations data analyst at a rail oper
 
 Full writeup: [`CASE_STUDY.md`](CASE_STUDY.md) — problem, architecture, a real bug found and fixed during QA, and the design decisions behind it.
 
+| Executive Overview | Operations Deep-Dive | Commercial |
+|---|---|---|
+| [![Executive Overview](powerbi/screenshots/page1_executive.jpg)](powerbi/screenshots/page1_executive.jpg) | [![Operations Deep-Dive](powerbi/screenshots/page2_operations.jpg)](powerbi/screenshots/page2_operations.jpg) | [![Commercial](powerbi/screenshots/page3_commercial.jpg)](powerbi/screenshots/page3_commercial.jpg) |
+
 ## Architecture
 
 ```mermaid

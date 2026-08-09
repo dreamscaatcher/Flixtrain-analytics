@@ -34,6 +34,12 @@ Early in the build, `fact_train_runs` tried to enrich synthetic bookings with re
 
 Python (ingestion) · Google BigQuery (warehouse) · SQL (star schema + KPI views) · Power BI (dashboard, DAX measures) · GitHub Actions (CI: tests + SQL dialect lint on push, scheduled daily refresh) · pytest.
 
+## Screenshots
+
+| Executive Overview | Operations Deep-Dive | Commercial |
+|---|---|---|
+| ![Executive Overview](powerbi/screenshots/page1_executive.jpg) | ![Operations Deep-Dive](powerbi/screenshots/page2_operations.jpg) | ![Commercial](powerbi/screenshots/page3_commercial.jpg) |
+
 ## Limitations, stated plainly
 
 Punctuality is a 10-hub proxy, not full-network. Delay is inferred from "changed" events (unchanged is assumed on-time) since the source API reports changes, not confirmations. Commercial figures are a demand model, not bookings — clearly and consistently labelled everywhere they appear.
