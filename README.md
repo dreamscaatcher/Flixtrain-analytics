@@ -4,6 +4,10 @@ End-to-end analytics platform for long-distance rail operations in Germany: a Py
 
 Built to mirror the day-to-day work of an operations data analyst at a rail operator: punctuality, cancellations, station bottlenecks, load factor, and revenue per seat-km — from raw API to executive dashboard.
 
+## Live dashboard
+
+**[Open the Power BI report](https://app.powerbi.com/view?r=eyJrIjoiYzQ2NzcwYzEtMWY3MC00MTcxLTg5MjEtMWUxZjc0ZDNiYjQzIiwidCI6IjRkNzEwMDY2LTQwMjAtNDJjNC04Y2JmLTM4YjhhZDJmYTM1ZiJ9)** — public link, no login required. Routes, delays, and cancellations are real DB/FlixTrain data; occupancy and revenue are a documented synthetic demand model (see [Data honesty](#data-honesty) below).
+
 ## Architecture
 
 ```mermaid
