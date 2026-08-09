@@ -34,3 +34,5 @@ Routes/distances are real (FlixTrain's official GTFS feed); seats sold, pricing,
 ## Known limitations
 
 Delay data covers tracked stations only (10 major hubs), so network punctuality is a hub-weighted proxy. The DB API reports changes, not confirmations — an unchanged event is *assumed* on time. Commercial figures are a demand model, not bookings.
+
+Real per-run delay cannot currently be joined to synthetic bookings: synthetic train numbers (`1200`-`1209`, reset daily) and real DB train numbers (each operator's own numbering) are unrelated ID spaces, so no legitimate join key exists between them. An earlier version of `fact_train_runs` attempted this join and always returned NULL (verified: 0 of 3,600 rows matched) — removed rather than shipped silently broken. `v_kpi_route_daily` carries route `distance_km` instead, to support demand-vs-distance analysis without a false real/synthetic linkage.

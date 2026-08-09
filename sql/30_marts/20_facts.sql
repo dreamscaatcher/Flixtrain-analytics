@@ -20,7 +20,16 @@ FROM rail_ops_staging.stg_stop_events;
 
 -- Grain: one row per train run (train x route x service date).
 -- Commercial columns are SYNTHETIC (see docs/data_dictionary.md).
--- Delay enrichment joins real stop events where the train number matches.
+--
+-- NOTE: an earlier version of this table attempted to enrich each synthetic
+-- run with real delay data via a LEFT JOIN on (train_number, service_date)
+-- against real stg_stop_events. That join never matched: synthetic train
+-- numbers are always 1200-1209 (reset daily, see synthetic.py), while real
+-- DB train numbers use each operator's own numbering (e.g. ICE 857, RE
+-- 11441) -- entirely different ID spaces with no legitimate way to link a
+-- synthetic booking to a specific real train run. Verified 0 of 3,600 rows
+-- ever matched. Removed rather than shipped as a silently-always-NULL
+-- column. Documented as a known limitation in docs/data_dictionary.md.
 CREATE OR REPLACE TABLE rail_ops_marts.fact_train_runs AS
 SELECT
   CONCAT(CAST(r.service_date AS STRING), '-', r.train_number, '-', r.route_id) AS train_run_key,
@@ -35,14 +44,5 @@ SELECT
   r.revenue_eur,
   r.seat_km,
   r.revenue_per_seat_km,
-  d.max_arrival_delay,
   r.is_synthetic
-FROM rail_ops_staging.stg_train_runs r
-LEFT JOIN (
-  SELECT train_number, service_date,
-         MAX(IF(event_type = 'ARRIVAL', delay_minutes, NULL)) AS max_arrival_delay
-  FROM rail_ops_staging.stg_stop_events
-  GROUP BY 1, 2
-) d
-  ON d.train_number = r.train_number
- AND d.service_date = r.service_date;
+FROM rail_ops_staging.stg_train_runs r;

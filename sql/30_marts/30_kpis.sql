@@ -43,7 +43,7 @@ SELECT
   AVG(f.load_factor)                                          AS avg_load_factor,
   SUM(f.revenue_eur)                                          AS revenue_eur,
   SAFE_DIVIDE(SUM(f.revenue_eur), SUM(f.seat_km))             AS revenue_per_seat_km,
-  AVG(f.max_arrival_delay)                                    AS avg_max_arrival_delay
+  AVG(r.distance_km)                                          AS distance_km
 FROM rail_ops_marts.fact_train_runs f
 JOIN rail_ops_marts.dim_route r ON r.route_key = f.route_key
 GROUP BY 1, 2, 3, 4;

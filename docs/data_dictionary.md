@@ -26,8 +26,9 @@
 | load_factor | FLOAT64 | sold / total |
 | avg_ticket_price_eur / revenue_eur | NUMERIC | yield rises with load (dynamic-pricing proxy) |
 | seat_km / revenue_per_seat_km | INT64 / FLOAT64 | unit economics |
-| max_arrival_delay | INT64 | enrichment from real stop events, NULL if no match |
 | is_synthetic | BOOL | always TRUE — flags the commercial fields only; route/distance are real (see dim_route) |
+
+**Known limitation, found and fixed during QA:** an earlier version of this table attempted to enrich each synthetic run with real delay data via a join on `(train_number, service_date)` against real stop events. That join never matched — verified 0 of 3,600 rows — because synthetic train numbers are always `1200`-`1209` (reset daily), while real DB train numbers use each operator's own numbering (e.g. ICE 857, RE 11441). There is no legitimate way to link a synthetic booking record to a specific real train run; they're separate data domains. The column was removed rather than shipped as a silently-always-NULL field (see `sql/30_marts/20_facts.sql`).
 
 ## Dimensions
 
