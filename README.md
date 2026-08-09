@@ -8,6 +8,8 @@ Built to mirror the day-to-day work of an operations data analyst at a rail oper
 
 **[Open the Power BI report](https://app.powerbi.com/view?r=eyJrIjoiYzQ2NzcwYzEtMWY3MC00MTcxLTg5MjEtMWUxZjc0ZDNiYjQzIiwidCI6IjRkNzEwMDY2LTQwMjAtNDJjNC04Y2JmLTM4YjhhZDJmYTM1ZiJ9)** — public link, no login required. Routes, delays, and cancellations are real DB/FlixTrain data; occupancy and revenue are a documented synthetic demand model (see [Data honesty](#data-honesty) below).
 
+Full writeup: [`CASE_STUDY.md`](CASE_STUDY.md) — problem, architecture, a real bug found and fixed during QA, and the design decisions behind it.
+
 ## Architecture
 
 ```mermaid
