@@ -1,5 +1,7 @@
 """Parser + offline ingestion tests against realistic API fixtures."""
 import csv
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from pipeline import config
 from pipeline.ingest import db_timetables
@@ -38,6 +40,18 @@ def test_platform_change_captured():
     flx = [r for r in rows if r["train_number"] == "1208" and r["event_type"] == "DEPARTURE"][0]
     assert flx["planned_platform"] == "14"
     assert flx["changed_platform"] == "14"
+
+
+def test_plan_start_uses_berlin_wall_time():
+    # 17 Oct 2026 is still CEST (UTC+2). A 04:00 UTC runner must request 06:00.
+    summer = datetime(2026, 10, 17, 4, 0, tzinfo=ZoneInfo("UTC"))
+    assert db_timetables.plan_start(summer) == datetime(2026, 10, 17, 6, 0)
+    assert db_timetables.plan_start(summer).tzinfo is None
+    # 15 Jan 2026 is CET (UTC+1).
+    winter = datetime(2026, 1, 15, 4, 0, tzinfo=ZoneInfo("UTC"))
+    assert db_timetables.plan_start(winter) == datetime(2026, 1, 15, 5, 0)
+    # Naive input is already Berlin local; only the minutes are truncated.
+    assert db_timetables.plan_start(datetime(2026, 8, 8, 12, 30)) == datetime(2026, 8, 8, 12, 0)
 
 
 def test_offline_ingest_writes_csv(tmp_path, monkeypatch):

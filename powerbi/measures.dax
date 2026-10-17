@@ -1,54 +1,208 @@
 // DAX measures for the Rail Ops dashboard.
-// NOTE: business logic (delay thresholds, load factor, revenue/seat-km) is
-// computed in BigQuery rail_ops_marts views -- these measures only aggregate and
-// format. Never re-derive KPI logic in DAX: the warehouse is the single
-// source of truth.
+// Business rules (delay < 6 min, delay < 16 min, load factor, revenue per
+// seat-km) are computed in BigQuery. These measures only aggregate.
+//
+// Do not aggregate the pre-computed rate columns (punctuality_6min,
+// avg_arrival_delay_min, avg_load_factor, distance_km, ...). They are already
+// averaged at a daily or station grain. Averaging them again is what made the
+// executive card (unweighted mean of daily rates, 75.01%) disagree with the
+// station-matrix total (unweighted mean of station rates, 0.68). Both were
+// the same arrival-event rule. The measures below are the event-weighted
+// ratio, so the card, the line, and the matrix total match under the same
+// slicers. See docs/kpi_definitions.md.
+//
+// After pasting into the _Measures table, set each measure's format string
+// (Measure tools → Format → Custom) to the Format comment under it. A format
+// set only on one visual is why the punctuality card showed a percent and the
+// line chart stayed on a 0–1 axis.
 
-// ---------- Operations (v_kpi_ops_daily / fact_stop_events) ----------
+// ---------- Operations (fact_stop_events; flags computed in the mart) ----------
+// Display folder: Operations
 
 Punctuality % (6 min) =
-AVERAGE ( v_kpi_ops_daily[punctuality_6min] )
+DIVIDE (
+    CALCULATE (
+        COUNTROWS ( fact_stop_events ),
+        fact_stop_events[event_type] = "ARRIVAL",
+        fact_stop_events[is_punctual_6] = TRUE ()
+    ),
+    CALCULATE (
+        COUNTROWS ( fact_stop_events ),
+        fact_stop_events[event_type] = "ARRIVAL"
+    )
+)
+// Format: 0.0%
 
 Punctuality % (15 min) =
-AVERAGE ( v_kpi_ops_daily[punctuality_15min] )
+DIVIDE (
+    CALCULATE (
+        COUNTROWS ( fact_stop_events ),
+        fact_stop_events[event_type] = "ARRIVAL",
+        fact_stop_events[is_punctual_15] = TRUE ()
+    ),
+    CALCULATE (
+        COUNTROWS ( fact_stop_events ),
+        fact_stop_events[event_type] = "ARRIVAL"
+    )
+)
+// Format: 0.0%
+
+// Constant line on the punctuality chart. 90% is a display target, not a
+// stored KPI.
+Punctuality Target (6 min) = 0.90
+// Format: 0.0%
 
 Avg Arrival Delay (min) =
-AVERAGE ( v_kpi_ops_daily[avg_arrival_delay_min] )
+CALCULATE (
+    AVERAGE ( fact_stop_events[delay_minutes] ),
+    fact_stop_events[event_type] = "ARRIVAL"
+)
+// Format: 0.00
 
 Cancellation Rate =
-AVERAGE ( v_kpi_ops_daily[cancellation_rate] )
+DIVIDE (
+    CALCULATE ( COUNTROWS ( fact_stop_events ), fact_stop_events[cancelled] = TRUE () ),
+    COUNTROWS ( fact_stop_events )
+)
+// Format: 0.0%
+
+Platform Change Rate =
+DIVIDE (
+    CALCULATE (
+        COUNTROWS ( fact_stop_events ),
+        fact_stop_events[platform_changed] = TRUE ()
+    ),
+    COUNTROWS ( fact_stop_events )
+)
+// Format: 0.0%
 
 Punctuality vs Prev Period =
 VAR Current = [Punctuality % (6 min)]
 VAR Previous =
     CALCULATE ( [Punctuality % (6 min)], DATEADD ( dim_date[date_key], -7, DAY ) )
-RETURN Current - Previous
+RETURN
+    Current - Previous
+// Format: +0.0%;-0.0%;0.0%
 
 // ---------- Commercial (v_kpi_route_daily; synthetic overlay) ----------
+// Display folder: Commercial
 
-Total Revenue EUR =
+Total Revenue (EUR) =
 SUM ( v_kpi_route_daily[revenue_eur] )
+// Format: €#,0
 
 Total Passengers =
 SUM ( v_kpi_route_daily[passengers] )
+// Format: #,0
 
 Avg Load Factor =
-AVERAGE ( v_kpi_route_daily[avg_load_factor] )
+DIVIDE (
+    SUM ( v_kpi_route_daily[passengers] ),
+    SUM ( v_kpi_route_daily[seats_total] )
+)
+// Format: 0.0%
 
-Revenue per Seat-km =
+Revenue per Seat-km (EUR) =
 DIVIDE (
     SUM ( v_kpi_route_daily[revenue_eur] ),
-    SUMX (
-        v_kpi_route_daily,
-        v_kpi_route_daily[revenue_eur] / v_kpi_route_daily[revenue_per_seat_km]
-    )
+    SUM ( v_kpi_route_daily[seat_km] )
 )
+// Format: €0.000
 
-Revenue MTD =
-TOTALMTD ( [Total Revenue EUR], dim_date[date_key] )
+// Route length. MAX so a route-day fact is not summed across days
+// ("Sum of distance_km" multiplied the length by the number of days).
+// Blank when more than one route is in context, so a total cannot show the
+// longest route as if it were a network distance.
+Route Distance (km) =
+IF (
+    HASONEVALUE ( dim_route[route_key] ),
+    MAX ( dim_route[distance_km] )
+)
+// Format: #,0
 
+Revenue MTD (EUR) =
+TOTALMTD ( [Total Revenue (EUR)], dim_date[date_key] )
+// Format: €#,0
+
+// Moving average of the daily seat-weighted load factor. Within each day the
+// value is passengers / seats. Across the 7 days each day counts once.
 Load Factor 7d Avg =
 AVERAGEX (
     DATESINPERIOD ( dim_date[date_key], MAX ( dim_date[date_key] ), -7, DAY ),
     [Avg Load Factor]
 )
+// Format: 0.0%
+
+// ---------- Filter context (header) ----------
+// Display folder: Filters
+
+// Min and max service date present on either fact in the current slicer
+// context. Empty days on dim_date (the calendar runs through 2027) are not
+// counted, so the header does not read "01 Jan 2026 – 31 Dec 2027".
+Active Date Range =
+VAR Bound =
+    SUMMARIZE (
+        UNION (
+            SELECTCOLUMNS ( fact_stop_events, "Date", fact_stop_events[date_key] ),
+            SELECTCOLUMNS ( fact_train_runs, "Date", fact_train_runs[date_key] )
+        ),
+        [Date]
+    )
+RETURN
+    IF (
+        ISEMPTY ( Bound ),
+        "No dates in filter",
+        FORMAT ( MINX ( Bound, [Date] ), "DD MMM YYYY" )
+            & " – "
+            & FORMAT ( MAXX ( Bound, [Date] ), "DD MMM YYYY" )
+    )
+// Format: @
+
+Slicer Route Label =
+VAR N =
+    COUNTROWS ( VALUES ( dim_route[route_label] ) )
+VAR Total =
+    COUNTROWS ( ALL ( dim_route[route_label] ) )
+RETURN
+    SWITCH (
+        TRUE (),
+        N = Total, "All routes",
+        N = 1, CONCATENATEX ( VALUES ( dim_route[route_label] ), dim_route[route_label], ", " ),
+        FORMAT ( N, "0" ) & " routes"
+    )
+// Format: @
+
+Slicer Station Label =
+VAR N =
+    COUNTROWS ( VALUES ( dim_station[station_name] ) )
+VAR Total =
+    COUNTROWS ( ALL ( dim_station[station_name] ) )
+RETURN
+    SWITCH (
+        TRUE (),
+        N = Total, "All stations",
+        N = 1, CONCATENATEX ( VALUES ( dim_station[station_name] ), dim_station[station_name], ", " ),
+        FORMAT ( N, "0" ) & " stations"
+    )
+// Format: @
+
+Slicer Category Label =
+VAR N =
+    COUNTROWS ( VALUES ( dim_train[train_category] ) )
+VAR Total =
+    COUNTROWS ( ALL ( dim_train[train_category] ) )
+RETURN
+    SWITCH (
+        TRUE (),
+        N = Total, "All categories",
+        N = 1, CONCATENATEX ( VALUES ( dim_train[train_category] ), dim_train[train_category], ", " ),
+        FORMAT ( N, "0" ) & " categories"
+    )
+// Format: @
+
+Filter Summary =
+"Dates: " & [Active Date Range]
+    & "  |  Routes: " & [Slicer Route Label]
+    & "  |  Stations: " & [Slicer Station Label]
+    & "  |  Categories: " & [Slicer Category Label]
+// Format: @

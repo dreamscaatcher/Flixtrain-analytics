@@ -5,6 +5,13 @@ Two endpoints are used:
   /plan/{evaNo}/{YYMMDD}/{HH}  -> planned stops for one station-hour (XML)
   /fchg/{evaNo}                -> all known changes (delays, cancellations) (XML)
 
+The plan date and hour are German local time (Europe/Berlin). One run writes
+only that near-term window: /fchg drops a train once it has departed, and it
+does not backfill earlier days. Multi-day punctuality comes from retaining
+each snapshot in BigQuery (see pipeline.load.bigquery_loader), not from
+asking the API for history and not from this CSV, which is always just the
+latest window.
+
 Output grain: one row per stop event (train x station x arrival|departure),
 with planned and changed timestamps kept separate. Delay minutes are
 deliberately NOT computed here -- that happens in SQL staging, so the
@@ -17,16 +24,22 @@ from __future__ import annotations
 
 import csv
 import logging
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterator
+from zoneinfo import ZoneInfo
 
 import requests
 
 from pipeline import config
 
 log = logging.getLogger(__name__)
+
+BERLIN = ZoneInfo("Europe/Berlin")
+# Marketplace free tier: 60 calls per minute. Stay under it on a 10-station pull.
+API_PAUSE_SECONDS = 1.1
 
 CSV_COLUMNS = [
     "stop_id", "station_eva", "station_name", "train_category", "train_number",
@@ -87,20 +100,37 @@ def parse_timetable_xml(xml_text: str, station_eva: int) -> Iterator[dict]:
             }
 
 
+def plan_start(now: datetime | None = None) -> datetime:
+    """Naive Europe/Berlin wall time, truncated to the hour, for /plan.
+
+    The API treats YYMMDD/HH as German local time. A UTC `datetime.now()` on
+    GitHub Actions requests the wrong hour and, around midnight, the wrong date.
+    Aware datetimes are converted. Naive datetimes are treated as already Berlin.
+    """
+    if now is None:
+        now = datetime.now(BERLIN)
+    elif now.tzinfo is not None:
+        now = now.astimezone(BERLIN)
+    return now.replace(minute=0, second=0, microsecond=0, tzinfo=None)
+
+
+def _get(url: str) -> str:
+    resp = requests.get(url, headers=_headers(), timeout=30)
+    resp.raise_for_status()
+    time.sleep(API_PAUSE_SECONDS)
+    return resp.text
+
+
 def fetch_station_hour(station_eva: int, when: datetime) -> str:
     """GET planned timetable for one station-hour. Returns raw XML."""
     url = f"{config.DB_API_BASE}/plan/{station_eva}/{when:%y%m%d}/{when:%H}"
-    resp = requests.get(url, headers=_headers(), timeout=30)
-    resp.raise_for_status()
-    return resp.text
+    return _get(url)
 
 
 def fetch_changes(station_eva: int) -> str:
     """GET all currently known changes (delays/cancellations) for a station."""
     url = f"{config.DB_API_BASE}/fchg/{station_eva}"
-    resp = requests.get(url, headers=_headers(), timeout=30)
-    resp.raise_for_status()
-    return resp.text
+    return _get(url)
 
 
 def _rows_from_fixtures() -> list[dict]:
@@ -111,9 +141,24 @@ def _rows_from_fixtures() -> list[dict]:
     return rows
 
 
-def _rows_from_api(hours: int) -> list[dict]:
+def _rows_from_api(hours: int, now: datetime | None = None) -> list[dict]:
+    # A wide pull records trains that have not departed yet. /fchg has no delay
+    # for them, and staging treats "no change" as on time, which inflates
+    # punctuality. Keep the window short and retain each run instead.
+    if hours > 6:
+        log.warning(
+            "hours=%s is wider than the window where delays are already known. "
+            "Trains that have not departed are stored as on time. Prefer the "
+            "default of 4 and a frequent schedule.",
+            hours,
+        )
     rows: list[dict] = []
-    start = datetime.now().replace(minute=0, second=0, microsecond=0)
+    start = plan_start(now)
+    log.info(
+        "Plan window starts %s Europe/Berlin for %s hour(s)",
+        start.isoformat(timespec="hours"),
+        hours,
+    )
     for eva in config.STATIONS:
         # planned slices for the next N hours
         for h in range(hours):
@@ -121,7 +166,7 @@ def _rows_from_api(hours: int) -> list[dict]:
                 rows.extend(parse_timetable_xml(fetch_station_hour(eva, start + timedelta(hours=h)), eva))
             except requests.RequestException as exc:
                 log.warning("plan fetch failed for %s +%sh: %s", eva, h, exc)
-        # current delay/cancellation picture
+        # current delay/cancellation picture (future and in-progress trains only)
         try:
             rows.extend(parse_timetable_xml(fetch_changes(eva), eva))
         except requests.RequestException as exc:
@@ -129,14 +174,14 @@ def _rows_from_api(hours: int) -> list[dict]:
     return rows
 
 
-def ingest(out_path: Path | None = None, hours: int = 4) -> Path:
+def ingest(out_path: Path | None = None, hours: int = 4, now: datetime | None = None) -> Path:
     """Run ingestion (API if credentials exist, fixtures otherwise) -> CSV."""
     out_path = out_path or config.DATA_DIR / "stop_events.csv"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     if config.DB_CLIENT_ID and config.DB_API_KEY:
         log.info("Ingesting live data from DB Timetables API")
-        rows = _rows_from_api(hours)
+        rows = _rows_from_api(hours, now=now)
     else:
         log.info("No DB API credentials found -> using bundled fixtures (offline mode)")
         rows = _rows_from_fixtures()

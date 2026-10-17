@@ -17,6 +17,25 @@ CREATE TABLE IF NOT EXISTS rail_ops_raw.stop_events (
   loaded_at          DATETIME
 );
 
+-- Every pipeline run appends its near-term snapshot here. stop_events above
+-- stays a mirror of the latest CSV. Staging reads both (see staging.sql).
+-- Same columns, same order, so INSERT ... SELECT * stays valid.
+CREATE TABLE IF NOT EXISTS rail_ops_raw.stop_events_history (
+  stop_id            STRING,
+  station_eva        INT64,
+  station_name       STRING,
+  train_category     STRING,
+  train_number       STRING,
+  line               STRING,
+  event_type         STRING,
+  planned_time       DATETIME,
+  changed_time       DATETIME,
+  planned_platform   STRING,
+  changed_platform   STRING,
+  cancelled          STRING,
+  loaded_at          DATETIME
+);
+
 CREATE TABLE IF NOT EXISTS rail_ops_raw.train_runs (
   service_date          DATE,
   train_number          STRING,

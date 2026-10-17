@@ -5,7 +5,11 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: "0 4 * * *"   # daily 04:00 UTC refresh
+    # Every 3 hours. /fchg drops a train once it has departed, and one daily
+    # 4-hour /plan pull is the whole operational extract. Truncating that
+    # snapshot is why punctuality-by-date never grew past a few service dates.
+    # Each run now appends its window (see stop_events_history).
+    - cron: "0 */3 * * *"
 
 jobs:
   test:
@@ -22,6 +26,9 @@ jobs:
     # Runs only on schedule, and only after tests pass.
     needs: test
     if: github.event_name == 'schedule'
+    concurrency:
+      group: warehouse-refresh
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,4 +45,4 @@ jobs:
           DB_CLIENT_ID: ${{ secrets.DB_CLIENT_ID }}
           DB_API_KEY: ${{ secrets.DB_API_KEY }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-        run: python -m pipeline.run_pipeline
+        run: python -m pipeline.run_pipeline --hours 4

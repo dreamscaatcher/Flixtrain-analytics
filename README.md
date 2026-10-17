@@ -24,7 +24,7 @@ flowchart LR
     D -->|views: dedupe, type,\nderive delay minutes| E[(rail_ops_staging)]
     E -->|star schema:\nfacts + dims| F[(rail_ops_marts)]
     F -->|KPI views only| G[Power BI]
-    H[GitHub Actions\ndaily 04:00 UTC] -.->|orchestrates| C
+    H[GitHub Actions\nevery 3 hours] -.->|orchestrates| C
 ```
 
 Layered ELT: `rail_ops_raw` (landed as-is) → `rail_ops_staging` (typed, deduplicated, derived columns computed once) → `rail_ops_marts` (star schema + KPI views). BI tools read **only** from marts — no KPI logic ever lives in a dashboard.
@@ -72,14 +72,14 @@ sql/                 Warehouse models, executed in order: 00_setup / 10_raw / 20
 tests/               pytest suite + realistic API fixtures (offline mode) + SQL dialect lint
 powerbi/             Dashboard build spec + DAX measures
 docs/                KPI definitions, data dictionary
-.github/workflows/   CI: tests on push; scheduled daily warehouse refresh
+.github/workflows/   CI: tests on push; scheduled warehouse refresh every 3 hours
 ```
 
 ## Key design decisions
 
 - **Derived logic lives in SQL, once.** Delay minutes, punctuality flags, load factor, revenue/seat-km are computed in staging/marts — DAX measures only aggregate. One definition, every consumer agrees.
 - **Documented grain on every fact table.** `fact_stop_events`: train × station × event. `fact_train_runs`: train × route × service date.
-- **Idempotent everywhere.** `CREATE OR REPLACE` models, truncating load jobs — the daily job re-runs safely with no manual cleanup.
+- **Idempotent everywhere.** `CREATE OR REPLACE` models. Commercial loads replace the table. Stop-event history is appended so punctuality keeps prior service dates. The scheduled job re-runs safely with no manual cleanup.
 - **Offline-first testing.** Bundled XML fixtures replicate the API's real format, and every SQL model is parse-checked as BigQuery syntax in CI (`tests/test_sql_dialect.py`) — no external credentials or uptime needed to catch regressions.
 - **Raw stays raw.** Booleans land as strings and are cast once in staging; a malformed source value fails visibly in one place, and reprocessing from landed data is always possible.
 
