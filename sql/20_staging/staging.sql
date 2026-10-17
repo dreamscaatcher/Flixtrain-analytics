@@ -1,16 +1,39 @@
 -- STAGING: typed, deduplicated, derived columns computed ONCE here
 -- (single source of truth -- no KPI logic ever lives in a dashboard).
 
--- Stop events: dedupe on (stop_id, event_type) keeping the latest load,
--- compute delay minutes from planned vs changed time.
+-- Stop events: union the accumulating history with the latest CSV mirror,
+-- then dedupe on (stop_id, event_type).
+--
+-- Prefer a row that actually observed a delay, cancellation, or platform
+-- change over a later plan-only refresh of the same stop. /fchg drops trains
+-- after they depart, so a later pull often has a null changed_time and would
+-- otherwise erase a real delay (and count the train as on time). When both
+-- rows observed a change, the later load wins so a delay revision is kept.
 CREATE OR REPLACE VIEW rail_ops_staging.stg_stop_events AS
-WITH deduped AS (
+WITH sourced AS (
+  SELECT * FROM rail_ops_raw.stop_events_history
+  UNION ALL
+  SELECT * FROM rail_ops_raw.stop_events
+),
+deduped AS (
   SELECT *,
          ROW_NUMBER() OVER (
            PARTITION BY stop_id, event_type
-           ORDER BY loaded_at DESC, changed_time DESC
+           ORDER BY
+             IF(
+               changed_time IS NOT NULL
+               OR LOWER(cancelled) = 'true'
+               OR (
+                 changed_platform IS NOT NULL
+                 AND changed_platform != ''
+                 AND changed_platform != planned_platform
+               ),
+               1, 0
+             ) DESC,
+             loaded_at DESC,
+             changed_time DESC
          ) AS rn
-  FROM rail_ops_raw.stop_events
+  FROM sourced
 )
 SELECT
   stop_id,

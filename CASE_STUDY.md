@@ -26,13 +26,13 @@ Early in the build, `fact_train_runs` tried to enrich synthetic bookings with re
 
 **Offline-first testing.** Bundled XML fixtures replicate the real DB API's format, so the full pipeline and test suite run with zero credentials (`--local-only`). Every SQL model is parse-checked as BigQuery syntax in CI.
 
-**Idempotent by default.** `CREATE OR REPLACE` models and truncating loads — the daily scheduled job re-runs safely with no manual cleanup.
+**Idempotent by default.** `CREATE OR REPLACE` models. Commercial loads replace the table. Stop-event history is appended so each refresh keeps prior service dates. The scheduled job re-runs safely with no manual cleanup.
 
 **Ratio-of-sums, not average-of-ratios.** Revenue per seat-km is aggregated as `SUM(revenue) / SUM(seat_km)` in the route-level view, not averaged per-run, to avoid Simpson's-paradox distortion across routes of different length and volume.
 
 ## Stack
 
-Python (ingestion) · Google BigQuery (warehouse) · SQL (star schema + KPI views) · Power BI (dashboard, DAX measures) · GitHub Actions (CI: tests + SQL dialect lint on push, scheduled daily refresh) · pytest.
+Python (ingestion) · Google BigQuery (warehouse) · SQL (star schema + KPI views) · Power BI (dashboard, DAX measures) · GitHub Actions (CI: tests + SQL dialect lint on push, warehouse refresh every 3 hours) · pytest.
 
 ## Screenshots
 

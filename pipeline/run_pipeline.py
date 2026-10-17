@@ -1,8 +1,9 @@
 """End-to-end pipeline: ingest -> load -> transform.
 
 Usage:
-    python -m pipeline.run_pipeline              # full run (needs Snowflake creds)
+    python -m pipeline.run_pipeline              # full run (needs GCP credentials)
     python -m pipeline.run_pipeline --local-only # ingestion + generation only
+    python -m pipeline.run_pipeline --hours 4    # near-term /plan window
 """
 from __future__ import annotations
 
@@ -22,9 +23,16 @@ def main(argv: list[str] | None = None) -> int:
                         help="Skip BigQuery load (produce CSVs only)")
     parser.add_argument("--days", type=int, default=90,
                         help="Days of synthetic commercial history to generate")
+    parser.add_argument(
+        "--hours", type=int, default=4,
+        help="Hours of /plan to request from now, in Europe/Berlin. "
+             "Keep this short (default 4): a long window stores trains whose "
+             "delays are not known yet as on time. Punctuality history comes "
+             "from retaining each run, not from one wide pull.",
+    )
     args = parser.parse_args(argv)
 
-    db_timetables.ingest()
+    db_timetables.ingest(hours=args.hours)
     synthetic.generate(days=args.days)
 
     if args.local_only:
